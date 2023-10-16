@@ -64,4 +64,4 @@ if __name__ == "__main__":
             except IOError:
                 pass
             with open(args.save, "a+") as f:
-                f.write(f"result{nresults} = {repr(result)}\n")
+                f.write(f"{repr(result)}\n")
