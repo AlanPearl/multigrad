@@ -1,3 +1,6 @@
+# Must add notebooks manually
+*.ipynb
+
 # Dynamic generated version file
 _version.py
 
