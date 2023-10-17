@@ -50,6 +50,7 @@ if __name__ == "__main__":
         print(f"Benchmark with {MPI.COMM_WORLD.Get_size()} MPI processes {args}")
         print("=" * 70)
         print(f"Grad descent iterations/sec = {calls_per_sec}")
+        print()
 
         if args.save is not None:
             result = dict(calls_per_sec=calls_per_sec,
