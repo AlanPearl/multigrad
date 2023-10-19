@@ -118,7 +118,7 @@ def simple_grad_descent(loss_func, guess, nsteps, learning_rate,
 @jax.tree_util.register_pytree_node_class
 @dataclass
 class MultiDiffOnePointModel:
-    dynamic_data: Optional[dict] = None
+    dynamic_data: Any = None
     static_data: tuple[Hashable, ...] = ()
     loss_func_has_aux: bool = False
     sumstats_func_has_aux: bool = False
