@@ -1,5 +1,3 @@
-"""mpiexec -n 10 python -m multidiff
-"""
 from typing import Sequence, Union, NamedTuple, Hashable, Optional, Any
 from dataclasses import dataclass
 import math
@@ -235,7 +233,3 @@ class MultiDiffOnePointModel:
     @classmethod
     def tree_unflatten(cls, aux_data: dict, children: tuple):
         return cls(*children, **aux_data)
-
-if __name__ == "__main__":
-    # Maybe somehow perform gradient descent if directly executed?
-    pass
