@@ -14,8 +14,8 @@ import multidiff
 
 # Optional: define a few NamedTuple datatypes for readability
 class ParamTuple(NamedTuple):
-    log_shmrat: float=-2.0
-    sigma_logsm: float=0.2
+    log_shmrat: float = -2.0
+    sigma_logsm: float = 0.2
 
 
 # Generate fake HMF as power law (truncated so that the SMF has a knee)
@@ -47,7 +47,7 @@ def calc_smf_bin(params, logsm_low, logsm_high, volume, log_halo_masses):
     return jnp.sum(cdf_high - cdf_low) / volume / (logsm_high - logsm_low)
 
 
-# You must define a MultiDiffOnePointModel subclass, following the example below:
+# You must define a MultiDiffOnePointModel subclass, following this example:
 @jax.tree_util.register_pytree_node_class
 @dataclass
 class MySMFModel(multidiff.MultiDiffOnePointModel):
@@ -125,7 +125,6 @@ if __name__ == "__main__":
     if plot_results and not MPI.COMM_WORLD.Get_rank():
         import matplotlib.pyplot as plt
 
-
         print(f"Initial guess: {guess} ... {t} seconds later ...")
         print(f"Final solution: {final}")
         print(f"Truth: {truth}")
@@ -143,13 +142,16 @@ if __name__ == "__main__":
         plt.clf()
 
         # Plot the SMF target, initial guess, and final solution
-        smf_bin_cens = 0.5 * (data["smf_bin_edges"][:-1] + data["smf_bin_edges"][1:])
+        smf_bin_cens = 0.5 * (
+            data["smf_bin_edges"][:-1] + data["smf_bin_edges"][1:])
         plt.semilogy(smf_bin_cens, true_smf, "go", label="Truth")
-        plt.semilogy(smf_bin_cens, data["target_sumstats"], "rx", label="Target")
+        plt.semilogy(
+            smf_bin_cens, data["target_sumstats"], "rx", label="Target")
         plt.plot(smf_bin_cens, guess_smf, "k--", label="Initial guess")
         plt.plot(smf_bin_cens, final_smf, label="Final solution")
         plt.xlabel("$\\log(M_\\star)$", fontsize=16)
-        plt.ylabel("$\\Phi(M_\\star)\\ [h^3{\\rm Mpc^{-3} dex^{-1}}]$", fontsize=16)
+        plt.ylabel(
+            "$\\Phi(M_\\star)\\ [h^3{\\rm Mpc^{-3} dex^{-1}}]$", fontsize=16)
         plt.legend(frameon=False, fontsize=16)
         plt.savefig("smf_fit.png", bbox_inches="tight")
         plt.clf()
