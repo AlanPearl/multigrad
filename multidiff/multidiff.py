@@ -1,13 +1,16 @@
-from typing import Sequence, Union, NamedTuple, Hashable, Optional, Any
-from dataclasses import dataclass
+"""
+"""
 import math
+from dataclasses import dataclass
+from typing import Any, Hashable, NamedTuple, Optional, Union
 
-import numpy as np
 import jax
+import numpy as np
 from jax import numpy as jnp
-
 from mpi4py import MPI
+
 COMM = MPI.COMM_WORLD
+
 
 class GradDescentResult(NamedTuple):
     loss: jnp.ndarray
@@ -15,9 +18,6 @@ class GradDescentResult(NamedTuple):
     aux: Union[jnp.ndarray, list]
 
 
-# NOTE: This assumes the entire data is initially loaded in memory
-# TODO: A separate function will be needed for loading data from file(s)
-# jax.jit
 def distribute_data(data):
     rank, nranks = COMM.Get_rank(), COMM.Get_size()
     fullsize = len(data)
@@ -60,15 +60,23 @@ def reduce_sum(value, root=None):
 
 
 def broadcast(value, root=0):
-    return COMM.bcast(value)
+    return COMM.bcast(value, root=root)
 
-def simple_grad_descent(loss_func, guess, nsteps, learning_rate,
-                        grad_loss_func=None, has_aux=False, **kwargs):
-    rank = COMM.Get_rank()
+
+def simple_grad_descent(
+    loss_func,
+    guess,
+    nsteps,
+    learning_rate,
+    grad_loss_func=None,
+    has_aux=False,
+    **kwargs,
+):
     if grad_loss_func is None:
         loss_and_grad_func = jax.value_and_grad(
             loss_func, has_aux=has_aux, **kwargs)
     else:
+
         def loss_and_grad_func(params):
             return (loss_func(params), grad_loss_func(params))
 
@@ -92,9 +100,10 @@ def simple_grad_descent(loss_func, guess, nsteps, learning_rate,
         return state, y
 
     initstate = (0.0, guess)
-    # iterations = jax.lax.scan(loopfunc, initstate, jnp.arange(nsteps), nsteps)[1]
+    # iterations = jax.lax.scan(
+    #     loopfunc, initstate, jnp.arange(nsteps), nsteps)[1]
     # loss, params, aux = iterations
-    # The below is equivalent, but doesn't JIT the loopfunc, which might be impossible
+    # The below is equivalent, but doesn't JIT the loopfunc
     ###################################
     loss, params, aux = [], [], []
     for x in range(nsteps):
@@ -113,8 +122,8 @@ def simple_grad_descent(loss_func, guess, nsteps, learning_rate,
     return GradDescentResult(loss=loss, params=params, aux=aux)
 
 
-# Prototypee for a PyTree (i.e., JAX-compatible object) that stores all
-# data and logic required to calculate a model prediction and loss
+# Prototypee for a PyTree (i.e., JAX-compatible object) that can
+# calculate a model prediction and loss, distributed over MPI
 @jax.tree_util.register_pytree_node_class
 @dataclass
 class MultiDiffOnePointModel:
@@ -127,17 +136,18 @@ class MultiDiffOnePointModel:
     def calc_partial_sumstats_from_params(self, params):
         """Custom method to map parameters to summary statistics"""
         raise NotImplementedError(
-            "Subclass must implement `partial_sumstats_func_from_params`")
+            "Subclass must implement `calc_partial_sumstats_func_from_params`"
+        )
 
     def calc_loss_from_sumstats(self, sumstats, sumstats_aux=None):
         """Custom method to map summary statistics to loss"""
         raise NotImplementedError(
-            "Subclass must implement `loss_func_from_sumstats`")
+            "Subclass must implement `calc_loss_func_from_sumstats`"
+        )
 
     # NOTE: Never jit this method because it uses mpi4py
-    def run_grad_descent(self, guess: Sequence[float],
-                         nsteps=100,
-                         learning_rate=0.1):
+    def run_grad_descent(self, guess: jnp.ndarray,
+                         nsteps=100, learning_rate=0.1):
         return simple_grad_descent(
             self.calc_loss_from_params,
             guess=guess,
@@ -149,19 +159,22 @@ class MultiDiffOnePointModel:
 
     def __post_init__(self):
         # Create auto-diff functions needed for gradient descent
-        # NOTE: jacrev might be faster if there are more params than sumstats
-        self._jac_sumstats_from_params = jax.jit(jax.jacfwd(
-            self.calc_partial_sumstats_from_params,
-            has_aux=self.sumstats_func_has_aux
-        ))
-        self._grad_loss_from_sumstats = jax.jit(jax.grad(
-            self.calc_loss_from_sumstats,
-            has_aux=self.loss_func_has_aux
-        ))
+        self._jac_sumstats_from_params = jax.jit(
+            jax.jacobian(
+                self.calc_partial_sumstats_from_params,
+                has_aux=self.sumstats_func_has_aux,
+            )
+        )
+        self._grad_loss_from_sumstats = jax.jit(
+            jax.grad(self.calc_loss_from_sumstats,
+                     has_aux=self.loss_func_has_aux)
+        )
 
     # sumstats functions
     # NOTE: Never jit this method because it uses mpi4py (when total=True)
-    def calc_sumstats_from_params(self, params: Sequence[float], total=True) -> Union[jnp.ndarray, tuple[jnp.ndarray, Any]]:
+    def calc_sumstats_from_params(
+        self, params: jnp.ndarray, total=True
+    ) -> Union[jnp.ndarray, tuple[jnp.ndarray, Any]]:
         result, aux = self.calc_partial_sumstats_from_params(params), None
         if self.sumstats_func_has_aux:
             result, aux = result
@@ -170,8 +183,55 @@ class MultiDiffOnePointModel:
         result = (result, aux) if self.sumstats_func_has_aux else result
         return result
 
+    # loss functions
+    # NOTE: Never jit this method because it uses mpi4py
+    def calc_loss_from_params(
+        self, params: jnp.ndarray
+    ) -> Union[jnp.ndarray, tuple[jnp.ndarray, Any]]:
+        sumstats = self.calc_sumstats_from_params(params)
+        if not self.sumstats_func_has_aux:
+            sumstats = (sumstats,)
+        return self.calc_loss_from_sumstats(*sumstats)
+
+    @jax.jit
+    def calc_dloss_dsumstats(
+        self, sumstats: jnp.ndarray, sumstats_aux=None
+    ) -> Union[jnp.ndarray, tuple[jnp.ndarray, Any]]:
+        sumstats = jnp.asarray(sumstats)
+        args = (sumstats, sumstats_aux) if self.sumstats_func_has_aux else (
+            sumstats,)
+        return self._grad_loss_from_sumstats(*args)
+
+    # NOTE: Never jit this method because it uses mpi4py
+    def calc_loss_and_grad_from_params(
+        self, params: jnp.ndarray
+    ) -> tuple[Union[jnp.ndarray, Any]]:
+        params = jnp.asarray(params)
+        sumstats = self.calc_partial_sumstats_from_params(params)
+        if not self.sumstats_func_has_aux:
+            sumstats = (sumstats,)
+        loss, aux = self.calc_loss_from_sumstats(*sumstats), None
+        dloss_dsumstats = self.calc_dloss_dsumstats(*sumstats)
+        if self.loss_func_has_aux:
+            loss, _ = loss
+            dloss_dsumstats, aux = dloss_dsumstats
+
+        # Use VJP for the chain rule dL/dp[i] = sum(dL/dx[j] * dx[j]/dp[i])
+        _, vjp_func = jax.vjp(
+            self.calc_partial_sumstats_from_params, params)
+        dloss_dparams = jnp.asarray(reduce_sum(vjp_func(dloss_dsumstats)[0]))
+
+        if self.loss_func_has_aux:
+            return (loss, aux), dloss_dparams
+        else:
+            return loss, dloss_dparams
+
+    # Don't use the following two methods - they are too memory intensive
+    # ===================================================================
     # NOTE: Never jit this method because it uses mpi4py (when total=True)
-    def calc_dsumstats_dparams(self, params: Sequence[float], total=True) -> Union[jnp.ndarray, tuple[jnp.ndarray, Any]]:
+    def calc_dsumstats_dparams(
+        self, params: jnp.ndarray, total=True
+    ) -> Union[jnp.ndarray, tuple[jnp.ndarray, Any]]:
         params = jnp.asarray(params)
         result, aux = self._jac_sumstats_from_params(params), None
         if self.sumstats_func_has_aux:
@@ -182,22 +242,10 @@ class MultiDiffOnePointModel:
             result = (result, aux)
         return result
 
-    # loss functions
     # NOTE: Never jit this method because it uses mpi4py
-    def calc_loss_from_params(self, params: Sequence[float]) -> Union[jnp.ndarray, tuple[jnp.ndarray, Any]]:
-        sumstats = self.calc_sumstats_from_params(params)
-        if not self.sumstats_func_has_aux:
-            sumstats = (sumstats,)
-        return self.calc_loss_from_sumstats(*sumstats)
-
-    @jax.jit
-    def calc_dloss_dsumstats(self, sumstats: Sequence[float], sumstats_aux=None) -> Union[jnp.ndarray, tuple[jnp.ndarray, Any]]:
-        sumstats = jnp.asarray(sumstats)
-        args = (sumstats, sumstats_aux) if self.sumstats_func_has_aux else (sumstats,)
-        return self._grad_loss_from_sumstats(*args)
-
-    # NOTE: Never jit this method because it uses mpi4py
-    def calc_dloss_dparams(self, params: Sequence[float]) -> Union[jnp.ndarray, tuple[jnp.ndarray, Any]]:
+    def calc_dloss_dparams(
+        self, params: jnp.ndarray
+    ) -> Union[jnp.ndarray, tuple[jnp.ndarray, Any]]:
         params = jnp.asarray(params)
         sumstats = self.calc_sumstats_from_params(params)
         dsumstats_dparams = self.calc_dsumstats_dparams(params)
@@ -219,9 +267,7 @@ class MultiDiffOnePointModel:
     # JAX compatibility functions below
     # =================================
     def tree_flatten(self) -> tuple[tuple, dict]:
-        children = (  # arrays / dynamic values
-            self.dynamic_data,
-        )
+        children = (self.dynamic_data,)  # arrays / dynamic values
         aux_data = dict(  # static values
             static_data=self.static_data,
             loss_func_has_aux=self.loss_func_has_aux,

@@ -11,6 +11,7 @@ from mpi4py import MPI
 import jax.numpy as jnp
 
 import multidiff
+from .smf_example import smf_grad_descent as sgd
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -32,11 +33,11 @@ def test_reduce_sum():
         # Ensure that all results are the same and give the expected value
         expected_result = jnp.arange(size).sum()
         assert all(x == expected_result for x in gathered_results), \
-            f"Rank{rank} gathered {gathered_results}, but expected = {expected_result}"
+            f"Rank{rank} gathered {gathered_results}, " \
+            f"but expected = {expected_result}"
 
 
 def test_simple_grad_descent_pipeline():
-    from .smf_example import smf_grad_descent as sgd
     num_halos = 10_000
     data = dict(
         log_halo_masses=jnp.log10(sgd.load_halo_masses(num_halos)),
@@ -48,15 +49,24 @@ def test_simple_grad_descent_pipeline():
             4.66692982e-05, 9.17260695e-06]),
     )
     model = sgd.MySMFModel(dynamic_data=data)
-    
+
     truth = sgd.ParamTuple(log_shmrat=-2.0, sigma_logsm=0.2)
-    assert jnp.allclose(data["target_sumstats"], model.calc_sumstats_from_params(truth))
+    assert jnp.allclose(
+        data["target_sumstats"], model.calc_sumstats_from_params(truth))
 
     gd_iterations = model.run_grad_descent(guess=truth, nsteps=2)
     gd_loss, gd_params = gd_iterations.loss, gd_iterations.params
     assert jnp.isclose(gd_loss[-1], 0.0)
     assert jnp.allclose(gd_params[-1], jnp.array([*truth]))
     assert jnp.allclose(model.calc_dloss_dparams(truth), 0.0, atol=1e-5)
+
+    # Calculate grad(loss) with the more memory efficient method
+    loss, dloss_dparams = model.calc_loss_and_grad_from_params(truth)
+
+    # Make sure it produces the same result as the memory intensive versions
+    assert jnp.allclose(loss, model.calc_loss_from_params(truth))
+    assert jnp.allclose(dloss_dparams, model.calc_dloss_dparams(truth))
+
 
 if __name__ == "__main__":
     pytest.main(["-s", __file__])
