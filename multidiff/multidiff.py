@@ -205,26 +205,25 @@ class MultiDiffOnePointModel:
     # NOTE: Never jit this method because it uses mpi4py
     def calc_loss_and_grad_from_params(
         self, params: jnp.ndarray
-    ) -> tuple[Union[jnp.ndarray, Any]]:
+    ) -> tuple[Union[jnp.ndarray, tuple], jnp.ndarray]:
         params = jnp.asarray(params)
-        sumstats = self.calc_partial_sumstats_from_params(params)
-        if not self.sumstats_func_has_aux:
-            sumstats = (sumstats,)
-        loss, aux = self.calc_loss_from_sumstats(*sumstats), None
-        dloss_dsumstats = self.calc_dloss_dsumstats(*sumstats)
-        if self.loss_func_has_aux:
-            loss, _ = loss
-            dloss_dsumstats, aux = dloss_dsumstats
 
-        # Use VJP for the chain rule dL/dp[i] = sum(dL/dx[j] * dx[j]/dp[i])
-        _, vjp_func = jax.vjp(
-            self.calc_partial_sumstats_from_params, params)
+        # Calculate sumstats AND save VJP func to perform chain rule later
+        vjp_results = jax.vjp(
+            self.calc_partial_sumstats_from_params, params,
+            has_aux=self.sumstats_func_has_aux)
+        sumstats, vjp_func = vjp_results[:2]
+        args = (sumstats, vjp_results[2:])
+
+        # Calculate loss + dloss_dsumstats. Should be inexpensive
+        loss = self.calc_loss_from_sumstats(*args)
+        dloss_dsumstats = self.calc_dloss_dsumstats(*args)
+        if self.loss_func_has_aux:
+            dloss_dsumstats = dloss_dsumstats[0]
+
+        # Use VJP for the chain rule dL/dp[i] = sum(dL/ds[j] * ds[j]/dp[i])
         dloss_dparams = jnp.asarray(reduce_sum(vjp_func(dloss_dsumstats)[0]))
-
-        if self.loss_func_has_aux:
-            return (loss, aux), dloss_dparams
-        else:
-            return loss, dloss_dparams
+        return loss, dloss_dparams
 
     # Don't use the following two methods - they are too memory intensive
     # ===================================================================
