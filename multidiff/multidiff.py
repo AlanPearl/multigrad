@@ -68,17 +68,19 @@ def simple_grad_descent(
     guess,
     nsteps,
     learning_rate,
+    loss_and_grad_func=None,
     grad_loss_func=None,
     has_aux=False,
     **kwargs,
 ):
-    if grad_loss_func is None:
-        loss_and_grad_func = jax.value_and_grad(
-            loss_func, has_aux=has_aux, **kwargs)
-    else:
+    if loss_and_grad_func is None:
+        if grad_loss_func is None:
+            loss_and_grad_func = jax.value_and_grad(
+                loss_func, has_aux=has_aux, **kwargs)
+        else:
 
-        def loss_and_grad_func(params):
-            return (loss_func(params), grad_loss_func(params))
+            def loss_and_grad_func(params):
+                return (loss_func(params), grad_loss_func(params))
 
     # Create our mpi4jax token with a dummy broadcast
     def loopfunc(state, _x):
@@ -86,11 +88,9 @@ def simple_grad_descent(
         params = jnp.asarray(params)
 
         # Evaluate the loss and gradient at given parameters
-        loss, grad = loss_and_grad_func(params)
+        (loss, grad), aux = loss_and_grad_func(params), None
         if has_aux:
-            (loss, aux), grad = loss, grad[0]
-        else:
-            aux = None
+            (loss, aux), grad = loss, grad
         y = (loss, params, aux)
 
         # Calculate the next parameters to evaluate (no need to broadcast this)
@@ -99,12 +99,9 @@ def simple_grad_descent(
         state = grad, params
         return state, y
 
+    # The below is equivalent to lax.scan without jitting
+    # ===================================================
     initstate = (0.0, guess)
-    # iterations = jax.lax.scan(
-    #     loopfunc, initstate, jnp.arange(nsteps), nsteps)[1]
-    # loss, params, aux = iterations
-    # The below is equivalent, but doesn't JIT the loopfunc
-    ###################################
     loss, params, aux = [], [], []
     for x in range(nsteps):
         initstate, y = loopfunc(initstate, x)
@@ -153,7 +150,7 @@ class MultiDiffOnePointModel:
             guess=guess,
             nsteps=nsteps,
             learning_rate=learning_rate,
-            grad_loss_func=self.calc_dloss_dparams,
+            loss_and_grad_func=self.calc_loss_and_grad_from_params,
             has_aux=self.loss_func_has_aux,
         )
 
@@ -213,17 +210,19 @@ class MultiDiffOnePointModel:
             self.calc_partial_sumstats_from_params, params,
             has_aux=self.sumstats_func_has_aux)
         sumstats, vjp_func = vjp_results[:2]
-        args = (sumstats, vjp_results[2:])
+        sumstats = jnp.asarray(reduce_sum(sumstats, root=self.root))
+        args = (sumstats, *vjp_results[2:])
 
-        # Calculate loss + dloss_dsumstats. Should be inexpensive
-        loss = self.calc_loss_from_sumstats(*args)
+        # Calculate dloss_dsumstats for chain rule. Should be inexpensive
         dloss_dsumstats = self.calc_dloss_dsumstats(*args)
         if self.loss_func_has_aux:
             dloss_dsumstats = dloss_dsumstats[0]
 
         # Use VJP for the chain rule dL/dp[i] = sum(dL/ds[j] * ds[j]/dp[i])
         dloss_dparams = jnp.asarray(reduce_sum(vjp_func(dloss_dsumstats)[0]))
-        return loss, dloss_dparams
+
+        # Return ((loss, *aux_if_any), dloss_dparams)
+        return self.calc_loss_from_sumstats(*args), dloss_dparams
 
     # Don't use the following two methods - they are too memory intensive
     # ===================================================================

@@ -1,12 +1,10 @@
 """
 This test can be run explicitly in an MPI environment.
 It should work for any number of processes, e.g.
-`pytest test_mpi.py`, `mpiexec -n 2 python test_mpi.py`,
-and `mpi -n 10 python test_mpi.py` all must pass
+`pytest test_mpi.py`, `mpiexec -n 2 pytest test_mpi.py`,
+and `mpiexec -n 10 pytest test_mpi.py` all must pass
 (the --with-mpi flag shouldn't affect anything)
 """
-import pytest
-
 from mpi4py import MPI
 import jax.numpy as jnp
 
@@ -66,7 +64,3 @@ def test_simple_grad_descent_pipeline():
     # Make sure it produces the same result as the memory intensive versions
     assert jnp.allclose(loss, model.calc_loss_from_params(truth))
     assert jnp.allclose(dloss_dparams, model.calc_dloss_dparams(truth))
-
-
-if __name__ == "__main__":
-    pytest.main(["-s", __file__])
