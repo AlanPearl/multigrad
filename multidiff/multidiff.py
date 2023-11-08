@@ -34,6 +34,36 @@ def distribute_data(data):
     return data[start:stop]
 
 
+def subrank_by_node():
+    comm = MPI.COMM_WORLD
+    # print("My rank is {0} of {1}".format(RANK, N_RANKS))
+
+    node_name = MPI.Get_processor_name()
+    # print("My rank is {0} and node number is {1}".format(rank, node_number))
+
+    nodelist = comm.allgather(node_name)
+    unique_nodelist = sorted(list(set(nodelist)))
+    node_number = unique_nodelist.index(node_name)
+    intra_node_id = len([i for i in nodelist[:RANK] if i == node_name])
+    comm.Barrier()
+
+    rankinfo = (RANK, intra_node_id, node_number)
+    infolist = comm.allgather(rankinfo)
+    sorted_infolist = sorted(infolist, key=lambda x: x[1])
+    sorted_infolist = sorted(sorted_infolist, key=lambda x: x[2])
+    pat = "Rank={0}, subrank={1}, node={2}"
+    if RANK == 0:
+        for item in sorted_infolist:
+            print(pat.format(*item))
+
+    sub_comm = comm.Split(color=node_number)
+    sub_rank, sub_nranks = sub_comm.Get_rank(), sub_comm.Get_size()
+    # print("My subrank is {0} of {1}".format(sub_rank, sub_nranks))
+
+    sub_comm.Free()  # Sometimes this cleanup helps prevent memory leaks
+    return sub_rank, sub_nranks, node_number, len(unique_nodelist)
+
+
 def reduce_sum(value, root=None):
     """Returns the sum of `value` across all MPI processes
 
