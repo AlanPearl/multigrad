@@ -7,9 +7,17 @@ from typing import Any, Hashable, NamedTuple, Optional, Union
 import jax
 import numpy as np
 from jax import numpy as jnp
-from mpi4py import MPI
 
-COMM = MPI.COMM_WORLD
+try:
+    from mpi4py import MPI
+
+    COMM = MPI.COMM_WORLD
+    RANK = COMM.Get_rank()
+    N_RANKS = COMM.Get_size()
+except ImportError:
+    MPI, COMM = None, None
+    RANK = 0
+    N_RANKS = 1
 
 
 class GradDescentResult(NamedTuple):
@@ -19,10 +27,9 @@ class GradDescentResult(NamedTuple):
 
 
 def distribute_data(data):
-    rank, nranks = COMM.Get_rank(), COMM.Get_size()
     fullsize = len(data)
-    chunksize = math.ceil(fullsize / nranks)
-    start = chunksize * rank
+    chunksize = math.ceil(fullsize / N_RANKS)
+    start = chunksize * RANK
     stop = start + chunksize
     return data[start:stop]
 
@@ -43,6 +50,8 @@ def reduce_sum(value, root=None):
     np.ndarray | float
         Sum of values given by each process
     """
+    if COMM is None:
+        return value
     return_to_scalar = not hasattr(value, "__len__")
     value = np.asarray(value)
     if root is None:
@@ -57,10 +66,6 @@ def reduce_sum(value, root=None):
     if return_to_scalar:
         total = total.tolist()
     return total
-
-
-def broadcast(value, root=0):
-    return COMM.bcast(value, root=root)
 
 
 def simple_grad_descent(
@@ -144,7 +149,7 @@ class MultiDiffOnePointModel:
 
     # NOTE: Never jit this method because it uses mpi4py
     def run_grad_descent(self, guess: jnp.ndarray,
-                         nsteps=100, learning_rate=0.1):
+                         nsteps=100, learning_rate=1e-3):
         return simple_grad_descent(
             self.calc_loss_from_params,
             guess=guess,
@@ -153,6 +158,17 @@ class MultiDiffOnePointModel:
             loss_and_grad_func=self.calc_loss_and_grad_from_params,
             has_aux=self.loss_func_has_aux,
         )
+
+    # NOTE: Never jit this method because it uses mpi4py
+    def run_adam(self, guess: jnp.ndarray,
+                 nsteps=100, epsilon=1e-3):
+        from .adam import run_adam
+        final_params = run_adam(
+            lambda x, _: self.calc_loss_and_grad_from_params(x),
+            params=guess, data=None,
+            n_steps=nsteps, epsilon=epsilon
+        )
+        return jnp.asarray(COMM.bcast(final_params, root=0))
 
     def __post_init__(self):
         # Create auto-diff functions needed for gradient descent
@@ -210,7 +226,7 @@ class MultiDiffOnePointModel:
             self.calc_partial_sumstats_from_params, params,
             has_aux=self.sumstats_func_has_aux)
         sumstats, vjp_func = vjp_results[:2]
-        sumstats = jnp.asarray(reduce_sum(sumstats, root=self.root))
+        sumstats = jnp.asarray(reduce_sum(sumstats, root=None))
         args = (sumstats, *vjp_results[2:])
 
         # Calculate dloss_dsumstats for chain rule. Should be inexpensive
@@ -219,7 +235,8 @@ class MultiDiffOnePointModel:
             dloss_dsumstats = dloss_dsumstats[0]
 
         # Use VJP for the chain rule dL/dp[i] = sum(dL/ds[j] * ds[j]/dp[i])
-        dloss_dparams = jnp.asarray(reduce_sum(vjp_func(dloss_dsumstats)[0]))
+        dloss_dparams = jnp.asarray(reduce_sum(
+            vjp_func(dloss_dsumstats)[0], root=self.root))
 
         # Return ((loss, *aux_if_any), dloss_dparams)
         return self.calc_loss_from_sumstats(*args), dloss_dparams
