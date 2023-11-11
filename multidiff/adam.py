@@ -5,8 +5,8 @@ https://github.com/ArgonneCPAC/diff-ghmod-tools/blob/main/diff_ghmod_tools/adam.
 try:
     import tqdm
 
-    def adam_trange(n):
-        return tqdm.trange(n, desc="adam opt")
+    def adam_trange(n, desc="Adam Gradient Descent Progress"):
+        return tqdm.trange(n, desc=desc)
 except ImportError:
     tqdm = None
     adam_trange = range

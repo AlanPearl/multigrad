@@ -19,6 +19,19 @@ except ImportError:
     RANK = 0
     N_RANKS = 1
 
+try:
+    if RANK:
+        raise ImportError("Only show progress bar on RANK=0 task")
+    import tqdm
+
+    def trange(n, desc=None):
+        return tqdm.trange(n, desc=desc)
+except ImportError:
+    tqdm = None
+
+    def trange(n, *_args, **_kwargs):
+        return range(n)
+
 
 class GradDescentResult(NamedTuple):
     loss: jnp.ndarray
@@ -138,7 +151,7 @@ def simple_grad_descent(
     # ===================================================
     initstate = (0.0, guess)
     loss, params, aux = [], [], []
-    for x in range(nsteps):
+    for x in trange(nsteps, desc="Simple Gradient Descent Progress"):
         initstate, y = loopfunc(initstate, x)
         loss.append(y[0])
         params.append(y[1])
@@ -200,6 +213,23 @@ class MultiDiffOnePointModel:
         )
         return jnp.asarray(COMM.bcast(final_params, root=0))
 
+    # NOTE: Never jit this method because it uses mpi4py
+    def run_bfgs(self, guess: jnp.ndarray, maxsteps=100):
+        import scipy.optimize
+
+        pbar = trange(maxsteps, desc="BFGS Gradient Descent Progress")
+
+        def callback(*_args, **_kwargs):
+            if hasattr(pbar, "update"):
+                pbar.update()
+
+        return scipy.optimize.minimize(
+            self.calc_loss_and_grad_from_params, x0=guess, callback=callback,
+            method="L-BFGS-B", jac=True, options=dict(maxiter=maxsteps))
+
+    # No need to jit __post_init__, since it is only called once
+    # TODO: might want to completely get rid of _jac_sumstats_from_params
+    # since we don't use it due to its large memory usage
     def __post_init__(self):
         # Create auto-diff functions needed for gradient descent
         self._jac_sumstats_from_params = jax.jit(
