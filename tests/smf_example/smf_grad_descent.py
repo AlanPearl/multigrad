@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from mpi4py import MPI
 import jax.scipy
 from jax import numpy as jnp
+import numpy as np
 
 import multidiff
 
@@ -24,7 +25,7 @@ def load_halo_masses(num_halos=10_000, slope=-2, mmin=10.0 ** 10, qmax=0.95):
     mhalo = mmin * (1 - q) ** (1/(slope+1))
 
     # Assign different halos to different MPI processes
-    return multidiff.distribute_data(mhalo)
+    return np.array_split(mhalo, MPI.COMM_WORLD.size)[MPI.COMM_WORLD.rank]
 
 
 # SMF helper functions
@@ -48,7 +49,6 @@ def calc_smf_bin(params, logsm_low, logsm_high, volume, log_halo_masses):
 
 
 # You must define a MultiDiffOnePointModel subclass, following this example:
-@jax.tree_util.register_pytree_node_class
 @dataclass
 class MySMFModel(multidiff.MultiDiffOnePointModel):
     # Optional: Update type hints and change default values as desired
@@ -59,7 +59,6 @@ class MySMFModel(multidiff.MultiDiffOnePointModel):
 
     # You must define the following two differentiable + compilable methods
     # =====================================================================
-    @jax.jit
     def calc_partial_sumstats_from_params(self, params):
         # This function should return an array of the PARTIAL sumstats
         # The TOTAL sumstats are obtained by summing over all MPI processes
@@ -76,7 +75,6 @@ class MySMFModel(multidiff.MultiDiffOnePointModel):
             logsm_low = logsm_high
         return jnp.array(smf)
 
-    @jax.jit
     def calc_loss_from_sumstats(self, sumstats, sumstats_aux=None):
         target_sumstats = jnp.log10(self.dynamic_data["target_sumstats"])
         sumstats = jnp.log10(sumstats)
@@ -105,7 +103,7 @@ if __name__ == "__main__":
 
     guess = ParamTuple(log_shmrat=-1, sigma_logsm=0.5)
     t0 = time.time()
-    gd_iterations = model.run_grad_descent(
+    gd_iterations = model.run_simple_grad_descent(
         guess=guess, nsteps=args.num_steps, learning_rate=args.learning_rate)
     gd_loss, gd_params = gd_iterations.loss, gd_iterations.params
     t = time.time() - t0

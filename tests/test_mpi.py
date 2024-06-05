@@ -3,7 +3,7 @@ This test can be run explicitly in an MPI environment.
 It should work for any number of processes, e.g.
 `pytest test_mpi.py`, `mpiexec -n 2 pytest test_mpi.py`,
 and `mpiexec -n 10 pytest test_mpi.py` all must pass
-(the --with-mpi flag shouldn't affect anything)
+(the --with-mpi flag shouldn't have any effect)
 """
 from mpi4py import MPI
 import jax.numpy as jnp
@@ -52,7 +52,7 @@ def test_simple_grad_descent_pipeline():
     assert jnp.allclose(
         data["target_sumstats"], model.calc_sumstats_from_params(truth))
 
-    gd_iterations = model.run_grad_descent(guess=truth, nsteps=2)
+    gd_iterations = model.run_simple_grad_descent(guess=truth, nsteps=2)
     gd_loss, gd_params = gd_iterations.loss, gd_iterations.params
     assert jnp.isclose(gd_loss[-1], 0.0)
     assert jnp.allclose(gd_params[-1], jnp.array([*truth]))
