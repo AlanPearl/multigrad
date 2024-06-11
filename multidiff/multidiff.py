@@ -305,10 +305,10 @@ def simple_grad_descent(
 class MultiDiffOnePointModel:
     """
     ALlows differentiable one-point calculations to be performed on separate
-    MPI ranks, and automatically sums over each rank controlled by the mpicomm
+    MPI ranks, and automatically sums over each rank controlled by the comm
     """
     dynamic_data: Any = None
-    mpicomm: Any = None
+    comm: Any = None
     loss_func_has_aux: bool = False
     sumstats_func_has_aux: bool = False
 
@@ -348,7 +348,7 @@ class MultiDiffOnePointModel:
             n_steps=nsteps, epsilon=epsilon, randkey=randkey
         )
 
-        comm = self.mpicomm if _comm is None else _comm
+        comm = self.comm if _comm is None else _comm
         return jnp.asarray(comm.bcast(final_params, root=0))
 
     # NOTE: Never jit this method because it uses mpi4py
@@ -375,8 +375,8 @@ class MultiDiffOnePointModel:
         return params, np.array(sumstats), np.array(losses)
 
     def __post_init__(self):
-        if self.mpicomm is None:
-            self.mpicomm = COMM
+        if self.comm is None:
+            self.comm = COMM
         # Create auto-diff functions needed for gradient descent
         self._grad_loss_from_sumstats = jax.grad(
             self.calc_loss_from_sumstats,
@@ -392,7 +392,7 @@ class MultiDiffOnePointModel:
         if self.sumstats_func_has_aux:
             result, aux = result
         if total:
-            result = jnp.asarray(reduce_sum(result, comm=self.mpicomm))
+            result = jnp.asarray(reduce_sum(result, comm=self.comm))
         result = (result, aux) if self.sumstats_func_has_aux else result
         return result
 
@@ -442,7 +442,7 @@ class MultiDiffOnePointModel:
             sumstats_func, params,
             has_aux=self.sumstats_func_has_aux)  # type: ignore
         sumstats, vjp_func = vjp_results[:2]
-        sumstats = jnp.asarray(reduce_sum(sumstats, comm=self.mpicomm))
+        sumstats = jnp.asarray(reduce_sum(sumstats, comm=self.comm))
         args = (sumstats, *vjp_results[2:])
 
         # Calculate dloss_dsumstats for chain rule. Should be inexpensive
@@ -452,7 +452,7 @@ class MultiDiffOnePointModel:
 
         # Use VJP for the chain rule dL/dp[i] = sum(dL/ds[j] * ds[j]/dp[i])
         dloss_dparams = jnp.asarray(reduce_sum(
-            vjp_func(dloss_dsumstats)[0], comm=self.mpicomm))
+            vjp_func(dloss_dsumstats)[0], comm=self.comm))
 
         if include_loss:
             # Return (loss_and_aux, dloss_dparams)
@@ -461,7 +461,7 @@ class MultiDiffOnePointModel:
             return dloss_dparams
 
     def __hash__(self):
-        return hash((self.mpicomm.name, self.calc_loss_from_sumstats))
+        return hash((self.comm.name, self.calc_loss_from_sumstats))
 
     def __eq__(self, other):
         return isinstance(other, MultiDiffGroup) and self is other
@@ -488,8 +488,8 @@ class MultiDiffGroup:
         loss, grad = [], []
         for model in self.models:
             res = model.calc_loss_and_grad_from_params(params)
-            loss.append(res[0]*0 if model.mpicomm.rank else res[0])
-            grad.append(res[1]*0 if model.mpicomm.rank else res[1])
+            loss.append(res[0]*0 if model.comm.rank else res[0])
+            grad.append(res[1]*0 if model.comm.rank else res[1])
         loss = jnp.concatenate(jnp.array(self.main_comm.allgather(loss)))
         grad = jnp.concatenate(jnp.array(self.main_comm.allgather(grad)))
         return loss.sum(), grad.sum(axis=0)
