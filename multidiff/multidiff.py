@@ -307,7 +307,7 @@ class MultiDiffOnePointModel:
     ALlows differentiable one-point calculations to be performed on separate
     MPI ranks, and automatically sums over each rank controlled by the comm
     """
-    dynamic_data: Any = None
+    aux_data: Any = None
     comm: Any = None
     loss_func_has_aux: bool = False
     sumstats_func_has_aux: bool = False
