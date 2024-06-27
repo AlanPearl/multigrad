@@ -224,6 +224,27 @@ class MultiDiffOnePointModel:
     # NOTE: Never jit this method because it uses mpi4py
     def run_simple_grad_descent(self: Any, guess,
                                 nsteps=100, learning_rate=1e-3):
+        """
+        Descend the gradient with a fixed learning rate to optimize parameters,
+        given an initial guess. Stochasticity not allowed.
+
+        Parameters
+        ----------
+        guess : array-like
+            The starting parameters.
+        nsteps : int (default=100)
+            The number of steps to take.
+        learning_rate : float (default=0.001)
+            The fixed learning rate.
+
+        Returns
+        -------
+        GradientDescentResult (contains the following attributes):
+            loss : array of loss values returned at each iteration
+            params : array of trial parameters at each iteration
+            aux : array of aux values returned at each iteration
+
+        """
         return util.simple_grad_descent(
             None,
             guess=guess,
@@ -235,19 +256,78 @@ class MultiDiffOnePointModel:
 
     # NOTE: Never jit this method because it uses mpi4py
     def run_adam(self: Any, guess,
-                 nsteps=100, epsilon=1e-3, randkey=None, _comm=None):
+                 nsteps=100, epsilon=1e-3, randkey=None, const_randkey=False):
+        """
+        Run adam to descend the gradient and optimize the model parameters,
+        given an initial guess. Stochasticity is allowed if randkey is passed.
+
+        Parameters
+        ----------
+        guess : array-like
+            The starting parameters.
+        nsteps : int (default=100)
+            The number of steps to take.
+        epsilon : float (default=0.001)
+            The adam learning rate.
+        randkey : int | PRNG Key (default=None)
+            If given, a new PRNG Key will be generated at each iteration and be
+            passed to `calc_loss_and_grad_from_params()` as the "randkey" kwarg
+        const_randkey : bool (default=False)
+            By default, randkey is regenerated at each gradient descent
+            iteration. Remove this behavior by setting const_randkey=True
+
+        Returns
+        -------
+        array-like
+            The optimal parameters.
+        """
         guess = jnp.asarray(guess)
+        if const_randkey:
+            def loss_and_grad_fn(x, _, **kw):
+                return self.calc_loss_and_grad_from_params(
+                    x, randkey=init_randkey, **kw)
+            assert randkey is not None
+            init_randkey = randkey
+            randkey = None
+        else:
+            def loss_and_grad_fn(x, _, **kw):
+                return self.calc_loss_and_grad_from_params(x, **kw)
         final_params = run_adam(
-            lambda x, _, **kw: self.calc_loss_and_grad_from_params(x, **kw),
-            params=guess, data=None,
+            loss_and_grad_fn, params=guess, data=None,
             n_steps=nsteps, epsilon=epsilon, randkey=randkey
         )
 
-        comm = self.comm if _comm is None else _comm
-        return jnp.asarray(comm.bcast(final_params, root=0))
+        return jnp.asarray(self.comm.bcast(final_params, root=0))
 
     # NOTE: Never jit this method because it uses mpi4py
-    def run_bfgs(self: Any, guess, maxsteps=100, randkey=None):
+    def run_bfgs(self: Any, guess,
+                 maxsteps=100, randkey=None):
+        """
+        Run adam to descend the gradient and optimize the model parameters,
+        given an initial guess. Stochasticity is allowed if randkey is passed.
+
+        Parameters
+        ----------
+        guess : array-like
+            The starting parameters.
+        nsteps : int (default=100)
+            The number of steps to take.
+        randkey : int | PRNG Key (default=None)
+            Since BFGS requires a deterministic function, this key will be
+            passed to `calc_loss_and_grad_from_params()` as the "randkey" kwarg
+            as a constant at every iteration
+
+        Returns
+        -------
+        OptimizeResult (contains the following attributes):
+            message : str, describes reason of termination
+            success : boolean, True if converged
+            fun : float, minimum loss found
+            x : array of parameters at minimum loss found
+            jac : array of gradient of loss at minimum loss found
+            nfev : int, number of function evaluations
+            nit : int, number of gradient descent iterations
+        """
         import scipy.optimize
 
         pbar = trange(maxsteps, desc="BFGS Gradient Descent Progress")
@@ -262,11 +342,39 @@ class MultiDiffOnePointModel:
             args=(randkey,))
 
     def run_lhs_param_scan(self, xmins, xmaxs, n_dim,
-                           num_evaluations, seed=None):
+                           num_evaluations, seed=None, randkey=None):
+        """
+        Compute sumstat and loss values over a Latin Hypercube sample
+
+        Parameters
+        ----------
+        xmins : float | array-like
+            Lower bound on each parameter
+        xmaxs : float | array-like
+            Upper bound on each parameter
+        n_dim : int
+            Number of parameters
+        num_evaluations : int
+            Number of Latin Hypercube samples to draw and evaluate
+        seed : int (default=None)
+            Seed to make LHD draws reproducible, randomized by default
+        randkey : PRNGKey | int (default=None)
+            Random key passed to each sumstat and loss evaluation
+
+        Returns
+        -------
+        params : array-like
+            Parameters (drawn in Latin Hypercube shape)
+        sumstats : array-like
+            Sumstats evaluated at each draw of parameters
+        losses : array-like
+            Loss evaluated at each draw of parameters
+        """
         params = util.latin_hypercube_sampler(xmins, xmaxs, n_dim,
                                               num_evaluations, seed=seed)
-        sumstats = [self.calc_sumstats_from_params(x) for x in params]
-        losses = [self.calc_loss_from_sumstats(x) for x in sumstats]
+        rk = {} if randkey is None else {"randkey": randkey}
+        sumstats = [self.calc_sumstats_from_params(x, **rk) for x in params]
+        losses = [self.calc_loss_from_sumstats(x, **rk) for x in sumstats]
         return params, np.array(sumstats), np.array(losses)
 
     def __post_init__(self):
@@ -281,6 +389,23 @@ class MultiDiffOnePointModel:
     # NOTE: Never jit this method because it uses mpi4py (when total=True)
     def calc_sumstats_from_params(
             self, params, total=True, randkey=None):
+        """Compute summary statistics at given parameters
+
+        Parameters
+        ----------
+        params : array-like
+            Model parameters
+        total : bool (default=True)
+            If true (default), sumstats will be summed over all MPI ranks
+        randkey : PRNGKey | int (default=None)
+            If set to a value other than None, the "randkey" kwarg will be
+            passed to user-defined methods
+
+        Returns
+        -------
+        array
+            Summary statistics evaluated at given parameters
+        """
         kwargs = {} if randkey is None else {"randkey": randkey}
         result, aux = self.calc_partial_sumstats_from_params(
             params, **kwargs), None
@@ -292,15 +417,6 @@ class MultiDiffOnePointModel:
         return result
 
     # loss functions
-    # NOTE: Never jit this method because it uses mpi4py
-    def calc_loss_from_params(
-            self, params, randkey=None):
-        kwargs = {} if randkey is None else {"randkey": randkey}
-        sumstats = self.calc_sumstats_from_params(params, **kwargs)
-        if not self.sumstats_func_has_aux:
-            sumstats = (sumstats,)
-        return self.calc_loss_from_sumstats(*sumstats, **kwargs)
-
     def calc_dloss_dsumstats(
             self, sumstats, sumstats_aux=None, randkey=None):
         kwargs = {} if randkey is None else {"randkey": randkey}
@@ -310,15 +426,71 @@ class MultiDiffOnePointModel:
         return self._grad_loss_from_sumstats(*args, **kwargs)
 
     # NOTE: Never jit this method because it uses mpi4py
+    def calc_loss_from_params(
+            self, params, randkey=None):
+        """Calculate the loss evaluated at a given set of parameters
+
+        Parameters
+        ----------
+        params : array-like
+            Model parameters
+        randkey : PRNGKey | int (default=None)
+            If set to a value other than None, the "randkey" kwarg will be
+            passed to user-defined methods
+
+        Returns
+        -------
+        float
+            The loss evaluated at the parameters given
+        """
+        kwargs = {} if randkey is None else {"randkey": randkey}
+        sumstats = self.calc_sumstats_from_params(params, **kwargs)
+        if not self.sumstats_func_has_aux:
+            sumstats = (sumstats,)
+        return self.calc_loss_from_sumstats(*sumstats, **kwargs)
+
+    # NOTE: Never jit this method because it uses mpi4py
     def calc_dloss_dparams(self, params, randkey=None):
+        """Calculate the gradient of the loss w.r.t. model parameters given
+
+        Parameters
+        ----------
+        params : array-like
+            Model parameters
+        randkey : PRNGKey | int (default=None)
+            If set to a value other than None, the "randkey" kwarg will be
+            passed to user-defined methods
+
+        Returns
+        -------
+        array
+            Gradient of the loss with respect to each parameter
+        """
         return self._vjp(params, randkey=randkey, include_loss=False)
 
     # NOTE: Never jit this method because it uses mpi4py
     def calc_loss_and_grad_from_params(self, params, randkey=None):
         """
-        `calc_loss_and_grad_from_params(x)` returns the equivalent of
+        Calculate the loss and its gradient.
+
+        This function returns the equivalent of
         `(calc_loss_from_params(x), calc_dloss_dparams(x))` but it is
         significantly cheaper than calling them separately
+
+        Parameters
+        ----------
+        params : array-like
+            Model parameters
+        randkey : PRNGKey | int (default=None)
+            If set to a value other than None, the "randkey" kwarg will be
+            passed to user-defined methods
+
+        Returns
+        -------
+        float
+            The loss evaluated at the parameters given
+        array
+            Gradient of the loss with respect to each parameter
         """
         return self._vjp(params, randkey=randkey, include_loss=True)
 
@@ -362,7 +534,7 @@ class MultiDiffOnePointModel:
         return isinstance(other, MultiDiffGroup) and self is other
 
 
-@dataclass
+@ dataclass
 class MultiDiffGroup:
     """
     Allows different MultiDiffOnePointModels to simultaneously perform their
