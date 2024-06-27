@@ -46,7 +46,7 @@ def test_simple_grad_descent_pipeline():
             3.77187086e-03, 1.69136131e-03, 6.28149020e-04, 1.90466686e-04,
             4.66692982e-05, 9.17260695e-06]),
     )
-    model = sgd.MySMFModel(dynamic_data=data)
+    model = sgd.MySMFModel(aux_data=data)
 
     truth = sgd.ParamTuple(log_shmrat=-2.0, sigma_logsm=0.2)
     assert jnp.allclose(

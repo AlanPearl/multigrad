@@ -52,19 +52,19 @@ def calc_smf_bin(params, logsm_low, logsm_high, volume, log_halo_masses):
 @dataclass
 class MySMFModel(multidiff.MultiDiffOnePointModel):
     # Optional: Update type hints and change default values as desired
-    dynamic_data: dict
+    aux_data: dict
     loss_func_has_aux: bool = False
-    # In addition to the dynamic_data and static_data attributes,
-    # note that you may also directly use global values (frozen in cache)
+    # In addition to the aux_data attribute, note that you may
+    # also directly use global values (works exactly the same)
 
     # You must define the following two differentiable + compilable methods
     # =====================================================================
     def calc_partial_sumstats_from_params(self, params):
         # This function should return an array of the PARTIAL sumstats
         # The TOTAL sumstats are obtained by summing over all MPI processes
-        bin_edges = jnp.asarray(self.dynamic_data["smf_bin_edges"])
-        log_halo_masses = jnp.asarray(self.dynamic_data["log_halo_masses"])
-        volume = self.dynamic_data["volume"]
+        bin_edges = jnp.asarray(self.aux_data["smf_bin_edges"])
+        log_halo_masses = jnp.asarray(self.aux_data["log_halo_masses"])
+        volume = self.aux_data["volume"]
 
         smf = []
         logsm_low = bin_edges[0]
@@ -76,7 +76,7 @@ class MySMFModel(multidiff.MultiDiffOnePointModel):
         return jnp.array(smf)
 
     def calc_loss_from_sumstats(self, sumstats, sumstats_aux=None):
-        target_sumstats = jnp.log10(self.dynamic_data["target_sumstats"])
+        target_sumstats = jnp.log10(self.aux_data["target_sumstats"])
         sumstats = jnp.log10(sumstats)
         # Reduced chi2 loss function assuming unit errors (mean squared error)
         return jnp.mean((sumstats - target_sumstats)**2)
@@ -99,7 +99,7 @@ if __name__ == "__main__":
             3.77187086e-03, 1.69136131e-03, 6.28149020e-04, 1.90466686e-04,
             4.66692982e-05, 9.17260695e-06]),
     )
-    model = MySMFModel(dynamic_data=data)
+    model = MySMFModel(aux_data=data)
 
     guess = ParamTuple(log_shmrat=-1, sigma_logsm=0.5)
     t0 = time.time()

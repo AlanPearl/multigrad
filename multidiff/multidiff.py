@@ -1,13 +1,15 @@
 """
 """
-from scipy.stats import qmc
 import math
 from dataclasses import dataclass
-from typing import Any, NamedTuple, Union
+from typing import Any, Union
 
 import jax
 import numpy as np
 from jax import numpy as jnp
+
+from . import util
+from .adam import run_adam
 
 try:
     from mpi4py import MPI
@@ -31,12 +33,6 @@ except ImportError:
     tqdm = None
 
 
-class GradDescentResult(NamedTuple):
-    loss: jnp.ndarray
-    params: jnp.ndarray
-    aux: Union[jnp.ndarray, list]
-
-
 def trange_no_tqdm(n, desc=None):
     return range(n)
 
@@ -46,64 +42,6 @@ def trange_with_tqdm(n, desc=None):
 
 
 trange = trange_no_tqdm if tqdm is None else trange_with_tqdm
-
-
-def latin_hypercube_sampler(xmin, xmax, n_dim, num_evaluations,
-                            seed=None, optimization=None):
-    xmin = np.zeros(n_dim) + xmin
-    xmax = np.zeros(n_dim) + xmax
-    sampler = qmc.LatinHypercube(n_dim, seed=seed, optimization=optimization)
-    unit_hypercube = sampler.random(num_evaluations)
-    return qmc.scale(unit_hypercube, xmin, xmax)
-
-
-def sort_all_by_ultimate_top_dump(ultimate_dump,
-                                  arrays_to_sort=[],
-                                  arrays_to_sort_and_reindex=[]):
-    ultimate_top_dump = find_ultimate_top_indices(ultimate_dump)
-    argsort = np.argsort(ultimate_top_dump)
-    argsort2 = np.argsort(argsort)
-
-    sorted_arrays = [np.asarray(x)[argsort] for x in arrays_to_sort]
-    reindexed_arrays = [sort_and_reindex(x, argsort, argsort2)
-                        for x in arrays_to_sort_and_reindex]
-
-    return sorted_arrays, reindexed_arrays
-
-
-def find_ultimate_top_indices(indices):
-    indices = np.array(indices)
-    recursion_count = 0
-    max_recursion = 50
-    while np.any(indices != indices[indices]):
-        recursion_count += 1
-        if recursion_count > max_recursion:
-            raise RecursionError(
-                f"Host search hasn't finished after {max_recursion} steps")
-        indices = indices[indices]
-    return indices
-
-
-def sort_and_reindex(indices, argsort=None, argsort2=None):
-    indices = np.asarray(indices)
-    argsort = np.argsort(indices) if argsort is None else argsort
-    argsort2 = np.argsort(argsort) if argsort2 is None else argsort2
-    return argsort2[indices][argsort]
-
-
-def scatter_nd(array, axis=0, comm=COMM, root=0):
-    """Scatter n-dimensional array from root to all ranks"""
-    ans: np.ndarray = np.array([])
-    if comm.rank == root:
-        splits = np.array_split(array, comm.size, axis=axis)
-        for i in range(comm.size):
-            if i == root:
-                ans = splits[i]
-            else:
-                comm.send(splits[i], dest=i)
-    else:
-        ans = comm.recv(source=root)
-    return ans
 
 
 def split_subcomms_by_node(comm=COMM):
@@ -212,7 +150,7 @@ def reduce_sum(value, root=None, comm=COMM):
 
     Parameters
     ----------
-    value : np.ndarray | float
+    value : np.ndarray | float | int
         value input by each MPI process to be summed
     root : int, optional
         rank of the process to receive and sum the values,
@@ -224,7 +162,7 @@ def reduce_sum(value, root=None, comm=COMM):
     Returns
     -------
     np.ndarray | float
-        Sum of values given by each process
+        Sum of values given by each rank of the communicator
     """
     if comm is None:
         return value
@@ -244,68 +182,26 @@ def reduce_sum(value, root=None, comm=COMM):
     return total
 
 
-def simple_grad_descent(
-    loss_func,
-    guess,
-    nsteps,
-    learning_rate,
-    loss_and_grad_func=None,
-    grad_loss_func=None,
-    has_aux=False,
-    **kwargs,
-):
-    if loss_and_grad_func is None:
-        if grad_loss_func is None:
-            loss_and_grad_func = jax.value_and_grad(
-                loss_func, has_aux=has_aux, **kwargs)
-        else:
-            def explicit_loss_and_grad_func(params):
-                return (loss_func(params), grad_loss_func(params))
-            loss_and_grad_func = explicit_loss_and_grad_func
-
-    # Create our mpi4jax token with a dummy broadcast
-    def loopfunc(state, _x):
-        grad, params = state
-        params = jnp.asarray(params)
-
-        # Evaluate the loss and gradient at given parameters
-        (loss, grad), aux = loss_and_grad_func(params), None
-        if has_aux:
-            (loss, aux), grad = loss, grad
-        y = (loss, params, aux)
-
-        # Calculate the next parameters to evaluate (no need to broadcast this)
-        params = params - learning_rate * grad
-        # params = broadcast(params, root=0)
-        state = grad, params
-        return state, y
-
-    # The below is equivalent to lax.scan without jitting
-    # ===================================================
-    initstate = (0.0, guess)
-    loss, params, aux = [], [], []
-    for x in trange(nsteps, desc="Simple Gradient Descent Progress"):
-        initstate, y = loopfunc(initstate, x)
-        loss.append(y[0])
-        params.append(y[1])
-        aux.append(y[2])
-    loss = jnp.array(loss)
-    params = jnp.array(params)
-    if has_aux:
-        try:
-            aux = jnp.array(aux)
-        except TypeError:
-            pass
-    ##################################
-
-    return GradDescentResult(loss=loss, params=params, aux=aux)
-
-
 @dataclass
 class MultiDiffOnePointModel:
     """
     ALlows differentiable one-point calculations to be performed on separate
-    MPI ranks, and automatically sums over each rank controlled by the comm
+    MPI ranks, and automatically sums over each rank controlled by the comm.
+    This is an abstract base class only. The user must personally define the
+    `calc_partial_sumstats_from_params` and `calc_loss_from_sumstats` methods
+
+    Parameters
+    ----------
+    aux_data : Any (default=None)
+        Any auxiliary data for easy access within sumstats or loss functions
+    comm : Comm (default=COMM_WORLD)
+        MPI communicator
+    loss_func_has_aux : bool (default=False)
+        If true, `calc_partial_sumstats_from_params(x) -> (y, aux)` and
+        `calc_loss_from_sumstats(y, aux) -> ...` signatures will be assumed
+    sumstats_func_has_aux : bool (default=False)
+        If true, `calc_loss_from_sumstats(...) -> (loss, aux)` signature
+        will be assumed
     """
     aux_data: Any = None
     comm: Any = None
@@ -328,7 +224,7 @@ class MultiDiffOnePointModel:
     # NOTE: Never jit this method because it uses mpi4py
     def run_simple_grad_descent(self: Any, guess,
                                 nsteps=100, learning_rate=1e-3):
-        return simple_grad_descent(
+        return util.simple_grad_descent(
             None,
             guess=guess,
             nsteps=nsteps,
@@ -340,7 +236,6 @@ class MultiDiffOnePointModel:
     # NOTE: Never jit this method because it uses mpi4py
     def run_adam(self: Any, guess,
                  nsteps=100, epsilon=1e-3, randkey=None, _comm=None):
-        from .adam import run_adam
         guess = jnp.asarray(guess)
         final_params = run_adam(
             lambda x, _, **kw: self.calc_loss_and_grad_from_params(x, **kw),
@@ -368,8 +263,8 @@ class MultiDiffOnePointModel:
 
     def run_lhs_param_scan(self, xmins, xmaxs, n_dim,
                            num_evaluations, seed=None):
-        params = latin_hypercube_sampler(xmins, xmaxs, n_dim,
-                                         num_evaluations, seed=seed)
+        params = util.latin_hypercube_sampler(xmins, xmaxs, n_dim,
+                                              num_evaluations, seed=seed)
         sumstats = [self.calc_sumstats_from_params(x) for x in params]
         losses = [self.calc_loss_from_sumstats(x) for x in sumstats]
         return params, np.array(sumstats), np.array(losses)
@@ -472,6 +367,14 @@ class MultiDiffGroup:
     """
     Allows different MultiDiffOnePointModels to simultaneously perform their
     calc_loss_and_grad_from_params method. The results are summed.
+
+    Parameters
+    ----------
+    models : tuple[MultiDiffOnePointModel]
+        Sequence of models, each providing a loss component to be summed.
+    main_comm : Comm (default=COMM_WORLD)
+        MPI communicator for the entire group (each model should be assigned
+        its own sub-communicator)
     """
     models: Union[tuple[MultiDiffOnePointModel, ...], MultiDiffOnePointModel]
     main_comm: Any = None

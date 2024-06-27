@@ -32,7 +32,7 @@ if __name__ == "__main__":
             3.77187086e-03, 1.69136131e-03, 6.28149020e-04, 1.90466686e-04,
             4.66692982e-05, 9.17260695e-06]),
     )
-    model = sgd.MySMFModel(dynamic_data=data)
+    model = sgd.MySMFModel(aux_data=data)
     guess = sgd.ParamTuple(log_shmrat=-1, sigma_logsm=0.5)
     nsteps = args.num_steps
     learning_rate = args.learning_rate
