@@ -10,6 +10,7 @@ from jax import numpy as jnp
 
 from . import util
 from .adam import run_adam
+from .bfgs import run_bfgs
 
 try:
     from mpi4py import MPI
@@ -286,7 +287,7 @@ class MultiDiffOnePointModel:
             def loss_and_grad_fn(x, _, **kw):
                 return self.calc_loss_and_grad_from_params(
                     x, randkey=init_randkey, **kw)
-            assert randkey is not None
+            assert randkey is not None, "Must pass randkey if const_randkey"
             init_randkey = randkey
             randkey = None
         else:
@@ -328,18 +329,8 @@ class MultiDiffOnePointModel:
             nfev : int, number of function evaluations
             nit : int, number of gradient descent iterations
         """
-        import scipy.optimize
-
-        pbar = trange(maxsteps, desc="BFGS Gradient Descent Progress")
-
-        def callback(*_args, **_kwargs):
-            if hasattr(pbar, "update"):
-                pbar.update()  # type: ignore
-
-        return scipy.optimize.minimize(
-            self.calc_loss_and_grad_from_params, x0=guess, callback=callback,
-            method="L-BFGS-B", jac=True, options=dict(maxiter=maxsteps),
-            args=(randkey,))
+        return run_bfgs(self.calc_loss_and_grad_from_params, guess,
+                        maxsteps=maxsteps, randkey=randkey, comm=self.comm)
 
     def run_lhs_param_scan(self, xmins, xmaxs, n_dim,
                            num_evaluations, seed=None, randkey=None):
