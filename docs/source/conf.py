@@ -9,7 +9,7 @@ from pkg_resources import get_distribution
 try:
     __version__ = get_distribution("multidiff").version
 except:  # noqa
-    __version__ = "unknwon version"
+    __version__ = "unknown version"
 
 project = 'multidiff'
 copyright = '2024, Alan Pearl'
@@ -30,6 +30,7 @@ extensions = [
 templates_path = ['_templates']
 exclude_patterns = [".ipynb_checkpoints/*"]
 language = "Python"
+master_doc = "index"
 
 
 # -- Options for HTML output -------------------------------------------------
