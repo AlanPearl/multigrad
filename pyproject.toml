@@ -14,7 +14,7 @@ dynamic = ["dependencies", "version"]
 dependencies = {file = ["requirements.txt"]}
 
 # [project.urls]
-# home = "https://github.com/ArgonneCPAC/multidiff"
+# home = "https://github.com/AlanPearl/multidiff"
 
 [tool.setuptools_scm]
 write_to = "multidiff/_version.py"
