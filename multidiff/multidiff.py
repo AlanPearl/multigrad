@@ -224,7 +224,7 @@ class MultiDiffOnePointModel:
 
     # NOTE: Never jit this method because it uses mpi4py
     def run_simple_grad_descent(self: Any, guess,
-                                nsteps=100, learning_rate=1e-3):
+                                nsteps=100, learning_rate=0.01):
         """
         Descend the gradient with a fixed learning rate to optimize parameters,
         given an initial guess. Stochasticity not allowed.
@@ -256,8 +256,9 @@ class MultiDiffOnePointModel:
         )
 
     # NOTE: Never jit this method because it uses mpi4py
-    def run_adam(self: Any, guess,
-                 nsteps=100, epsilon=1e-3, randkey=None, const_randkey=False):
+    def run_adam(self: Any, guess, nsteps=100, param_bounds=None,
+                 learning_rate=0.01, randkey=None, const_randkey=False,
+                 comm=None):
         """
         Run adam to descend the gradient and optimize the model parameters,
         given an initial guess. Stochasticity is allowed if randkey is passed.
@@ -268,7 +269,10 @@ class MultiDiffOnePointModel:
             The starting parameters.
         nsteps : int (default=100)
             The number of steps to take.
-        epsilon : float (default=0.001)
+        param_bounds : Sequence, optional
+            Lower and upper bounds of each parameter of "shape" (ndim, 2). Pass
+            `None` as the bound for each unbounded parameter, by default None
+        learning_rate : float (default=0.001)
             The adam learning rate.
         randkey : int | PRNG Key (default=None)
             If given, a new PRNG Key will be generated at each iteration and be
@@ -282,6 +286,7 @@ class MultiDiffOnePointModel:
         array-like
             The optimal parameters.
         """
+        comm = self.comm if comm is None else comm
         guess = jnp.asarray(guess)
         if const_randkey:
             def loss_and_grad_fn(x, _, **kw):
@@ -293,18 +298,18 @@ class MultiDiffOnePointModel:
         else:
             def loss_and_grad_fn(x, _, **kw):
                 return self.calc_loss_and_grad_from_params(x, **kw)
-        final_params = run_adam(
-            loss_and_grad_fn, params=guess, data=None,
-            n_steps=nsteps, epsilon=epsilon, randkey=randkey
+        params_steps = run_adam(
+            loss_and_grad_fn, params=guess, data=None, nsteps=nsteps,
+            param_bounds=param_bounds, learning_rate=learning_rate,
+            randkey=randkey
         )
 
-        return jnp.asarray(self.comm.bcast(final_params, root=0))
+        return jnp.asarray(comm.bcast(params_steps, root=0))
 
     # NOTE: Never jit this method because it uses mpi4py
-    def run_bfgs(self: Any, guess,
-                 maxsteps=100, randkey=None):
+    def run_bfgs(self: Any, guess, maxsteps=100, randkey=None, comm=None):
         """
-        Run adam to descend the gradient and optimize the model parameters,
+        Run BFGS to descend the gradient and optimize the model parameters,
         given an initial guess. Stochasticity is allowed if randkey is passed.
 
         Parameters
@@ -329,8 +334,9 @@ class MultiDiffOnePointModel:
             nfev : int, number of function evaluations
             nit : int, number of gradient descent iterations
         """
+        comm = self.comm if comm is None else comm
         return run_bfgs(self.calc_loss_and_grad_from_params, guess,
-                        maxsteps=maxsteps, randkey=randkey, comm=self.comm)
+                        maxsteps=maxsteps, randkey=randkey, comm=comm)
 
     def run_lhs_param_scan(self, xmins, xmaxs, n_dim,
                            num_evaluations, seed=None, randkey=None):
@@ -562,19 +568,21 @@ class MultiDiffGroup:
 
     # NOTE: Never jit this method because it uses mpi4py
     def run_simple_grad_descent(self, guess,
-                                nsteps=100, learning_rate=1e-3):
+                                nsteps=100, learning_rate=0.01):
         return MultiDiffOnePointModel.run_simple_grad_descent(
             self, guess, nsteps, learning_rate)
 
     # NOTE: Never jit this method because it uses mpi4py
-    def run_bfgs(self, guess, maxsteps=100):
-        return MultiDiffOnePointModel.run_bfgs(self, guess, maxsteps)
+    def run_bfgs(self, guess, maxsteps=100, randkey=None):
+        return MultiDiffOnePointModel.run_bfgs(
+            self, guess, maxsteps, randkey=randkey, comm=self.main_comm)
 
     # NOTE: Never jit this method because it uses mpi4py
-    def run_adam(self, guess,
-                 nsteps=100, epsilon=1e-3, randkey=None):
+    def run_adam(self, guess, nsteps=100, param_bounds=None,
+                 learning_rate=0.01, randkey=None, const_randkey=False):
         return MultiDiffOnePointModel.run_adam(
-            self, guess, nsteps, epsilon, randkey, self.main_comm)
+            self, guess, nsteps, param_bounds, learning_rate, randkey,
+            const_randkey=const_randkey, comm=self.main_comm)
 
     def __hash__(self):
         if isinstance(self.models, MultiDiffOnePointModel):

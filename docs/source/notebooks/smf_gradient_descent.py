@@ -123,12 +123,12 @@ if __name__ == "__main__":
     final_smf = model.calc_sumstats_from_params(results.x)
     # Print and plot results from the root rank only
     if not MPI.COMM_WORLD.rank:
-        print("BGFS has converged:", results.success, flush=True)
-        print("Initial guess =", init_params, flush=True)
-        print("True params =", true_params, flush=True)
-        print("Converged params =", results.x, flush=True)
-        print("\nFull results info:", flush=True)
-        print(results, flush=True)
+        print("BGFS has converged:", results.success)
+        print("Initial guess =", init_params)
+        print("True params =", true_params)
+        print("Converged params =", results.x)
+        print("\nFull results info:")
+        print(results)
 
         axes = plot_hmf_and_smf(
             true_smf, logmh_per_rank, label="Truth")

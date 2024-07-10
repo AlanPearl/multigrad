@@ -30,8 +30,9 @@ def reduce_sum(partial_value):
 
 
 # partial(jax.jit, static_argnums=0)
-def simple_grad_descent(data_dict, loss_and_grad_func, guess, learning_rate=1.0, nsteps=100):
-    rank, nranks = COMM.Get_rank(), COMM.Get_size()
+def simple_grad_descent(data_dict, loss_and_grad_func, guess,
+                        learning_rate=0.01, nsteps=100):
+    rank = COMM.Get_rank()
 
     # Create our mpi4jax token with a dummy broadcast
     def loopfunc(state, _x):
@@ -53,10 +54,12 @@ def simple_grad_descent(data_dict, loss_and_grad_func, guess, learning_rate=1.0,
         return state, y
 
     initstate = (0.0, guess)
-    iterations = jax.lax.scan(loopfunc, initstate, jnp.arange(nsteps), nsteps)[1]
+    iterations = jax.lax.scan(
+        loopfunc, initstate, jnp.arange(nsteps), nsteps)[1]
 
     loss, params = iterations
     return pd.DataFrame(dict(loss=loss, params=params))
+
 
 if __name__ == "__main__":
     # Maybe somehow perform gradient descent if directly executed?
