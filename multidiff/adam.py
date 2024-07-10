@@ -183,9 +183,10 @@ def run_adam(logloss_and_grad_fn, params, data, nsteps=100, param_bounds=None,
     uparams = apply_trans(params)
     final_uparams = run_adam_unbounded(
         unbound_loss_and_grad, uparams, data, nsteps, learning_rate, randkey)
-    final_params = invert_trans(final_uparams.T).T
 
-    return final_params
+    if RANK == 0:
+        final_params = invert_trans(final_uparams.T).T
+        return final_params
 
 
 def apply_transforms(params, bounds):
