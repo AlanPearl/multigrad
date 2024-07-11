@@ -4,7 +4,7 @@ from jax import numpy as jnp
 import numpy as np
 import matplotlib.pyplot as plt
 
-import multidiff
+import multigrad
 
 
 def load_halo_masses(num_halos=10_000, comm=MPI.COMM_WORLD):
@@ -73,7 +73,7 @@ def plot_hmf_and_smf(smf, logmh_per_rank=None, plotarg="C0o-",
     return axes
 
 
-class MySMFModel(multidiff.MultiDiffOnePointModel):
+class MySMFModel(multigrad.OnePointModel):
     def calc_partial_sumstats_from_params(self, params):
         # Accessing global variables is fine, but I prefer to store them in
         # the `aux_data` attribute, which we will define during construction
@@ -101,7 +101,7 @@ if __name__ == "__main__":
 
     # We must sum calc_smf over all MPI ranks this time
     # Could equivalently use model.calc_sumstats_from_params(true_params)
-    true_smf = multidiff.reduce_sum(
+    true_smf = multigrad.reduce_sum(
         calc_smf(true_params, smf_bin_edges, volume, log_halo_masses))
 
     aux_data = dict(

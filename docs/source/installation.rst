@@ -3,7 +3,7 @@ Installation Instructions
 
 Installation
 ------------
-``pip install multidiff``
+``pip install multigrad``
 
 Prerequisites
 -------------
@@ -19,4 +19,4 @@ Example installation with conda env:
     conda create -n py312 python=3.12
     conda activate py312
     conda install -c conda-forge mpi4py jax
-    pip install multidiff
+    pip install multigrad

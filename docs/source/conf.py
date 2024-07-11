@@ -7,11 +7,11 @@ from pkg_resources import get_distribution
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 try:
-    __version__ = get_distribution("multidiff").version
+    __version__ = get_distribution("multigrad").version
 except:  # noqa
     __version__ = "unknown version"
 
-project = 'multidiff'
+project = 'multigrad'
 copyright = '2024, Alan Pearl'
 author = 'Alan Pearl'
 version = __version__

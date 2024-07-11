@@ -10,7 +10,7 @@ import jax.scipy
 from jax import numpy as jnp
 import numpy as np
 
-import multidiff
+import multigrad
 
 
 # Optional: define a few NamedTuple datatypes for readability
@@ -48,9 +48,9 @@ def calc_smf_bin(params, logsm_low, logsm_high, volume, log_halo_masses):
     return jnp.sum(cdf_high - cdf_low) / volume / (logsm_high - logsm_low)
 
 
-# You must define a MultiDiffOnePointModel subclass, following this example:
+# You must define a OnePointModel subclass, following this example:
 @dataclass
-class MySMFModel(multidiff.MultiDiffOnePointModel):
+class MySMFModel(multigrad.OnePointModel):
     # Optional: Update type hints and change default values as desired
     aux_data: dict
     loss_func_has_aux: bool = False
@@ -83,7 +83,7 @@ class MySMFModel(multidiff.MultiDiffOnePointModel):
 
 
 parser = argparse.ArgumentParser(
-    __file__, description="Example pipeline using multidiff to fit the SMF")
+    __file__, description="Example pipeline using multigrad to fit the SMF")
 parser.add_argument("--num-halos", type=int, default=10_000)
 parser.add_argument("--num-steps", type=int, default=2000)
 parser.add_argument("--learning-rate", type=float, default=1e-3)

@@ -3,17 +3,17 @@
 API Reference
 =============
 
-``multidiff``
+``multigrad``
 -------------
 
-.. autoclass:: multidiff.MultiDiffOnePointModel
+.. autoclass:: multigrad.OnePointModel
     :members:
 
-.. autoclass:: multidiff.MultiDiffGroup
+.. autoclass:: multigrad.OnePointGroup
     :members:
 
-.. autofunction:: multidiff.split_subcomms
+.. autofunction:: multigrad.split_subcomms
 
-.. autofunction:: multidiff.split_subcomms_by_node
+.. autofunction:: multigrad.split_subcomms_by_node
 
-.. autofunction:: multidiff.reduce_sum
+.. autofunction:: multigrad.reduce_sum

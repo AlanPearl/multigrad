@@ -1,7 +1,7 @@
-from .multidiff import MultiDiffOnePointModel, MultiDiffGroup, util
-from .multidiff import reduce_sum, split_subcomms, split_subcomms_by_node
+from .multigrad import OnePointModel, OnePointGroup, util
+from .multigrad import reduce_sum, split_subcomms, split_subcomms_by_node
 
 __all__ = [
-    "MultiDiffOnePointModel", "MultiDiffGroup", "reduce_sum",
+    "OnePointModel", "OnePointGroup", "reduce_sum",
     "split_subcomms", "split_subcomms_by_node", "util"
 ]

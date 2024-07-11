@@ -3,7 +3,7 @@ from datetime import timedelta
 import subprocess
 from pathlib import Path
 
-JOBNAME = "multidiff_benchmark"
+JOBNAME = "multigrad_benchmark"
 ACCOUNT = "galsampler"
 PARTITION = "bdwall"
 
@@ -14,7 +14,7 @@ def generate_sbatch(
     nhalos,
     nsteps,
     timelim,
-    tasks_on_separate_nodes=True):
+        tasks_on_separate_nodes=True):
 
     return f"""#!/bin/bash
 
@@ -34,7 +34,7 @@ srun --cpu-bind=cores --ntasks {numtasks} python benchmark.py --num-halos {nhalo
 
 parser = argparse.ArgumentParser(
     __file__,
-    description="Submit scaling test jobs for multidiff"
+    description="Submit scaling test jobs for multigrad"
 )
 parser.add_argument("--num-halos", type=int, default=100_000)
 parser.add_argument("--num-steps", type=int, default=100)

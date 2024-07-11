@@ -8,7 +8,7 @@ and `mpiexec -n 10 pytest test_mpi.py` all must pass
 from mpi4py import MPI
 import jax.numpy as jnp
 
-import multidiff
+import multigrad
 from .smf_example import smf_grad_descent as sgd
 
 comm = MPI.COMM_WORLD
@@ -21,7 +21,7 @@ def test_reduce_sum():
     value = jnp.array(rank)
 
     # Reduce the sum of the values across all ranks
-    result = multidiff.reduce_sum(value)
+    result = multigrad.reduce_sum(value)
 
     # Gather the results from all processes
     gathered_results = jnp.array(comm.allgather(result))

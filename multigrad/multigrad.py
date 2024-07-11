@@ -184,7 +184,7 @@ def reduce_sum(value, root=None, comm=COMM):
 
 
 @dataclass
-class MultiDiffOnePointModel:
+class OnePointModel:
     """
     ALlows differentiable one-point calculations to be performed on separate
     MPI ranks, and automatically sums over each rank controlled by the comm.
@@ -528,32 +528,32 @@ class MultiDiffOnePointModel:
         return hash((self.comm.name, self.calc_loss_from_sumstats))
 
     def __eq__(self, other):
-        return isinstance(other, MultiDiffGroup) and self is other
+        return isinstance(other, OnePointGroup) and self is other
 
 
 @ dataclass
-class MultiDiffGroup:
+class OnePointGroup:
     """
-    Allows different MultiDiffOnePointModels to simultaneously perform their
+    Allows different OnePointModels to simultaneously perform their
     calc_loss_and_grad_from_params method. The results are summed.
 
     Parameters
     ----------
-    models : tuple[MultiDiffOnePointModel]
+    models : tuple[OnePointModel]
         Sequence of models, each providing a loss component to be summed.
     main_comm : Comm (default=COMM_WORLD)
         MPI communicator for the entire group (each model should be assigned
         its own sub-communicator)
     """
-    models: Union[tuple[MultiDiffOnePointModel, ...], MultiDiffOnePointModel]
+    models: Union[tuple[OnePointModel, ...], OnePointModel]
     main_comm: Any = None
 
     def __post_init__(self):
         if self.main_comm is None:
             self.main_comm = COMM
-        if isinstance(self.models, MultiDiffOnePointModel):
+        if isinstance(self.models, OnePointModel):
             self.models = (self.models,)
-        assert isinstance(self.models[0], MultiDiffOnePointModel)
+        assert isinstance(self.models[0], OnePointModel)
 
     # NOTE: Never jit this method because it uses mpi4py
     def calc_loss_and_grad_from_params(self, params):
@@ -569,25 +569,25 @@ class MultiDiffGroup:
     # NOTE: Never jit this method because it uses mpi4py
     def run_simple_grad_descent(self, guess,
                                 nsteps=100, learning_rate=0.01):
-        return MultiDiffOnePointModel.run_simple_grad_descent(
+        return OnePointModel.run_simple_grad_descent(
             self, guess, nsteps, learning_rate)
 
     # NOTE: Never jit this method because it uses mpi4py
     def run_bfgs(self, guess, maxsteps=100, randkey=None):
-        return MultiDiffOnePointModel.run_bfgs(
+        return OnePointModel.run_bfgs(
             self, guess, maxsteps, randkey=randkey, comm=self.main_comm)
 
     # NOTE: Never jit this method because it uses mpi4py
     def run_adam(self, guess, nsteps=100, param_bounds=None,
                  learning_rate=0.01, randkey=None, const_randkey=False):
-        return MultiDiffOnePointModel.run_adam(
+        return OnePointModel.run_adam(
             self, guess, nsteps, param_bounds, learning_rate, randkey,
             const_randkey=const_randkey, comm=self.main_comm)
 
     def __hash__(self):
-        if isinstance(self.models, MultiDiffOnePointModel):
+        if isinstance(self.models, OnePointModel):
             self.models = (self.models,)
         return hash((self.main_comm.name, self.models[0]))
 
     def __eq__(self, other):
-        return isinstance(other, MultiDiffGroup) and self is other
+        return isinstance(other, OnePointGroup) and self is other

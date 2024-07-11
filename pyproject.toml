@@ -1,5 +1,5 @@
 [project]
-name = "multidiff"
+name = "multigrad"
 authors = [
     {name = "Alan Pearl", email = "alanpearl13@gmail.com"}
 ]
@@ -14,16 +14,16 @@ dynamic = ["dependencies", "version"]
 dependencies = {file = ["requirements.txt"]}
 
 [project.urls]
-home = "https://github.com/AlanPearl/multidiff"
+home = "https://github.com/AlanPearl/multigrad"
 
 [tool.setuptools_scm]
-write_to = "multidiff/_version.py"
+write_to = "multigrad/_version.py"
 write_to_template = "__version__ = '{version}'"
 
 [tool.setuptools]
 include-package-data = true
 packages = {find = {exclude=["tests*", "scripts*", "docs*", "notebooks*"]}}
-package-dir = {multidiff = "multidiff"}
+package-dir = {multigrad = "multigrad"}
 
 [build-system]
 requires = [

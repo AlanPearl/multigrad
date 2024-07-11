@@ -6,6 +6,7 @@ import jax.numpy as jnp
 
 import smf_grad_descent as sgd
 
+
 def speedtest(model, guess, nsteps=100, learning_rate=1e-3):
     model.run_grad_descent(
         guess=guess, nsteps=nsteps, learning_rate=learning_rate)
@@ -13,7 +14,7 @@ def speedtest(model, guess, nsteps=100, learning_rate=1e-3):
 
 parser = argparse.ArgumentParser(
     __file__,
-    description="Speed test multidiff with the smf_grad_descent.py pipeline."
+    description="Speed test multigrad with the smf_grad_descent.py pipeline."
 )
 parser.add_argument("--num-halos", type=int, default=10_000)
 parser.add_argument("--num-steps", type=int, default=100)
@@ -47,7 +48,8 @@ if __name__ == "__main__":
     if not MPI.COMM_WORLD.Get_rank():
         calls_per_sec = args.num_steps/t
 
-        print(f"Benchmark with {MPI.COMM_WORLD.Get_size()} MPI processes {args}")
+        print(
+            f"Benchmark with {MPI.COMM_WORLD.Get_size()} MPI processes {args}")
         print("=" * 70)
         print(f"Grad descent iterations/sec = {calls_per_sec}")
         print()
