@@ -186,7 +186,7 @@ def reduce_sum(value, root=None, comm=COMM):
 @dataclass
 class OnePointModel:
     """
-    ALlows differentiable one-point calculations to be performed on separate
+    Allows differentiable one-point calculations to be performed on separate
     MPI ranks, and automatically sums over each rank controlled by the comm.
     This is an abstract base class only. The user must personally define the
     `calc_partial_sumstats_from_params` and `calc_loss_from_sumstats` methods
