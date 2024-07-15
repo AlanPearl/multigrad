@@ -6,6 +6,10 @@
 Welcome to multigrad's documentation!
 =====================================
 
+multigrad allows you to easily implement data-parallelized (over MPI),
+differentiable models in the Jax framework. The code is open-source and
+available on `GitHub <https://github.com/AlanPearl/multigrad>`__.
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
