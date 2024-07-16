@@ -1,3 +1,5 @@
+from ._version import __version__  # noqa
+
 from .multigrad import OnePointModel, OnePointGroup, util
 from .multigrad import reduce_sum, split_subcomms, split_subcomms_by_node
 
