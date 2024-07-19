@@ -311,7 +311,8 @@ class OnePointModel:
                  randkey=None, comm=None):
         """
         Run BFGS to descend the gradient and optimize the model parameters,
-        given an initial guess. Stochasticity is allowed if randkey is passed.
+        given an initial guess. Stochasticity must be held fixed via a random
+        key
 
         Parameters
         ----------
@@ -578,9 +579,10 @@ class OnePointGroup:
             self, guess, nsteps, learning_rate)
 
     # NOTE: Never jit this method because it uses mpi4py
-    def run_bfgs(self, guess, maxsteps=100, randkey=None):
+    def run_bfgs(self, guess, maxsteps=100, param_bounds=None, randkey=None):
         return OnePointModel.run_bfgs(
-            self, guess, maxsteps, randkey=randkey, comm=self.main_comm)
+            self, guess, maxsteps, param_bounds=param_bounds,
+            randkey=randkey, comm=self.main_comm)
 
     # NOTE: Never jit this method because it uses mpi4py
     def run_adam(self, guess, nsteps=100, param_bounds=None,
