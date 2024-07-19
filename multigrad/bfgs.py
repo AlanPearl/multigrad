@@ -29,7 +29,8 @@ def trange_with_tqdm(n, desc="BFGS Gradient Descent Progress"):
 bfgs_trange = trange_no_tqdm if tqdm is None else trange_with_tqdm
 
 
-def run_bfgs(loss_and_grad_fn, params, maxsteps=100, randkey=None, comm=COMM):
+def run_bfgs(loss_and_grad_fn, params, maxsteps=100, param_bounds=None,
+             randkey=None, comm=COMM):
     """Run the adam optimizer on a loss function with a custom gradient.
 
     Parameters
@@ -40,6 +41,9 @@ def run_bfgs(loss_and_grad_fn, params, maxsteps=100, randkey=None, comm=COMM):
         The starting parameters.
     maxsteps : int (default=100)
         The maximum number of steps to allowed.
+    param_bounds : Sequence, optional
+        Lower and upper bounds of each parameter of "shape" (ndim, 2). Pass
+        `None` as the bound for each unbounded parameter, by default None
     randkey : int | PRNG Key (default=None)
         This will be passed to `logloss_and_grad_fn` under the "randkey" kwarg
     comm : MPI Communicator (default=COMM_WORLD)
@@ -78,7 +82,8 @@ def run_bfgs(loss_and_grad_fn, params, maxsteps=100, randkey=None, comm=COMM):
 
         result = scipy.optimize.minimize(
             loss_and_grad_fn_root, x0=params, method="L-BFGS-B", jac=True,
-            options=dict(maxiter=maxsteps), callback=callback)
+            options=dict(maxiter=maxsteps), callback=callback,
+            bounds=param_bounds)
 
         if hasattr(pbar, "close"):
             pbar.close()  # type:ignore

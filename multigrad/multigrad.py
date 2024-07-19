@@ -307,7 +307,8 @@ class OnePointModel:
         return jnp.asarray(comm.bcast(params_steps, root=0))
 
     # NOTE: Never jit this method because it uses mpi4py
-    def run_bfgs(self: Any, guess, maxsteps=100, randkey=None, comm=None):
+    def run_bfgs(self: Any, guess, maxsteps=100, param_bounds=None,
+                 randkey=None, comm=None):
         """
         Run BFGS to descend the gradient and optimize the model parameters,
         given an initial guess. Stochasticity is allowed if randkey is passed.
@@ -316,8 +317,11 @@ class OnePointModel:
         ----------
         guess : array-like
             The starting parameters.
-        nsteps : int (default=100)
+        maxsteps : int (default=100)
             The number of steps to take.
+        param_bounds : Sequence, optional
+            Lower and upper bounds of each parameter of "shape" (ndim, 2). Pass
+            `None` as the bound for each unbounded parameter, by default None
         randkey : int | PRNG Key (default=None)
             Since BFGS requires a deterministic function, this key will be
             passed to `calc_loss_and_grad_from_params()` as the "randkey" kwarg
@@ -335,8 +339,9 @@ class OnePointModel:
             nit : int, number of gradient descent iterations
         """
         comm = self.comm if comm is None else comm
-        return run_bfgs(self.calc_loss_and_grad_from_params, guess,
-                        maxsteps=maxsteps, randkey=randkey, comm=comm)
+        return run_bfgs(
+            self.calc_loss_and_grad_from_params, guess, maxsteps=maxsteps,
+            param_bounds=param_bounds, randkey=randkey, comm=comm)
 
     def run_lhs_param_scan(self, xmins, xmaxs, n_dim,
                            num_evaluations, seed=None, randkey=None):
