@@ -331,13 +331,20 @@ class OnePointModel:
         Returns
         -------
         OptimizeResult (contains the following attributes):
-            message : str, describes reason of termination
-            success : boolean, True if converged
-            fun : float, minimum loss found
-            x : array of parameters at minimum loss found
-            jac : array of gradient of loss at minimum loss found
-            nfev : int, number of function evaluations
-            nit : int, number of gradient descent iterations
+            message : str
+                describes reason of termination
+            success : boolean
+                True if converged
+            fun : float
+                minimum loss found
+            x : array
+                parameters at minimum loss found
+            jac : array
+                gradient of loss at minimum loss found
+            nfev : int
+                number of function evaluations
+            nit : int
+                number of gradient descent iterations
         """
         comm = self.comm if comm is None else comm
         return run_bfgs(
