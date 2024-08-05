@@ -55,7 +55,7 @@ $$ \frac{\partial L}{\partial x_j} = \sum_\limits{k} \frac{\partial L}{\partial 
 
 where $\partial y_k$ = $\sum_i\partial y_{k (i)}$. By pulling out this summation over $i$,
 
-$$ \frac{\partial L}{\partial x_j} = \sum_\limits{i} \sum_\limits{k} \frac{\partial L}{\partial y_{k (i)}} \frac{\partial y_k}{\partial x_j} $$
+$$ \frac{\partial L}{\partial x_j} = \sum_\limits{i} \sum_\limits{k} \frac{\partial L}{\partial y_k} \frac{\partial y_{k (i)}}{\partial x_j} $$
 
 and by rewriting this in matrix representation,
 
