@@ -59,7 +59,7 @@ $$ \frac{\partial L}{\partial x_j} = \sum\limits_{i} \sum\limits_{k} \frac{\part
 
 and by rewriting this in matrix representation,
 
-$$ \vec{\nabla}_{x} L = \sum\limits_{i} (\vec{\nabla}_{y} L)^T J_{(i)} $$
+$$ \vec{\nabla_x} L = \sum\limits_{i} (\vec{\nabla_y} L)^T J_{(i)} $$
 
 we can clearly identify that each process has to perform a vector-Jacobian product (VJP), where $J_{(i)}$ is the Jacobian matrix such
 that $J_{kj (i)} = \frac{\partial y_{k (i)}}{\partial j_k}$. Fortunately, this is a computation that Jax can perform very efficiently,
