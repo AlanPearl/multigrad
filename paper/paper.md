@@ -17,7 +17,7 @@ authors:
 affiliations:
  - name: HEP Division, Argonne National Laboratory, 9700 South Cass Avenue, Lemont, IL 60439, USA
    index: 1
-date: 5 August 2024
+date: 8 August 2024
 bibliography: paper.bib
 ---
 
@@ -51,22 +51,21 @@ and as a sum of terms that each process can compute independently.
 
 We will begin from the definition of the multivariate chain rule,
 
-$$ \frac{\partial L}{\partial x_j} = \sum_\limits{k} \frac{\partial L}{\partial y_k} \frac{\partial y_k}{\partial x_j} $$
+$$ \frac{\partial L}{\partial x_j} = \sum\limits_{k} \frac{\partial L}{\partial y_k} \frac{\partial y_k}{\partial x_j} $$
 
 where $\partial y_k$ = $\sum_i\partial y_{k (i)}$. By pulling out this summation over $i$,
 
-$$ \frac{\partial L}{\partial x_j} = \sum_\limits{i} \sum_\limits{k} \frac{\partial L}{\partial y_k} \frac{\partial y_{k (i)}}{\partial x_j} $$
+$$ \frac{\partial L}{\partial x_j} = \sum\limits_{i} \sum\limits_{k} \frac{\partial L}{\partial y_k} \frac{\partial y_{k (i)}}{\partial x_j} $$
 
 and by rewriting this in matrix representation,
 
-$$ \vec{\nabla_x} L = \sum_\limits{i} (\vec{\nabla_y} L)^T J_{(i)} $$
+$$ \vec{\nabla}_{x} L = \sum\limits_{i} (\vec{\nabla}_{y} L)^T J_{(i)} $$
 
 we can clearly identify that each process has to perform a vector-Jacobian product (VJP), where $J_{(i)}$ is the Jacobian matrix such
 that $J_{kj (i)} = \frac{\partial y_{k (i)}}{\partial j_k}$. Fortunately, this is a computation that Jax can perform very efficiently,
-without the need to explicitly calculate the full Jacobian matrix by making use of the `jax.vjp` feature, saving us orders of magnitude
-of time and memory requirements. 
-
-# Features
+without the need to explicitly calculate the full Jacobian matrix by making use of the
+[`jax.vjp`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vjp.html) feature, saving us orders of magnitude of time and memory
+requirements.
 
 
 
