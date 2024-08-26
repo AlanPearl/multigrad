@@ -1,5 +1,5 @@
 ---
-title: 'MultiGrad: A framework for implementing MPI-distributed Jax models'
+title: 'MultiGrad: A framework for optimizing MPI-distributed Jax models'
 tags:
   - Python
   - Jax
