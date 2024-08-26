@@ -8,11 +8,11 @@ authors:
   - name: Alan N. Pearl
     orcid: 0000-0001-9820-9619
     affiliation: 1
-  - name: Andrew P. Hearin
-    orcid: 0000-0003-2219-6852
-    affiliation: 1
   - name: Gillian D. Beltz-Mohrmann
     orcid: 0000-0002-4392-8920
+    affiliation: 1
+  - name: Andrew P. Hearin
+    orcid: 0000-0003-2219-6852
     affiliation: 1
 affiliations:
  - name: HEP Division, Argonne National Laboratory, 9700 South Cass Avenue, Lemont, IL 60439, USA
