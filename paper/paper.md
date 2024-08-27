@@ -1,5 +1,5 @@
 ---
-title: 'MultiGrad: A framework for implementing MPI-distributed Jax models'
+title: 'MultiGrad: A framework for optimizing MPI-distributed Jax models'
 tags:
   - Python
   - Jax
@@ -8,11 +8,11 @@ authors:
   - name: Alan N. Pearl
     orcid: 0000-0001-9820-9619
     affiliation: 1
-  - name: Andrew P. Hearin
-    orcid: 0000-0003-2219-6852
-    affiliation: 1
   - name: Gillian D. Beltz-Mohrmann
     orcid: 0000-0002-4392-8920
+    affiliation: 1
+  - name: Andrew P. Hearin
+    orcid: 0000-0003-2219-6852
     affiliation: 1
 affiliations:
  - name: HEP Division, Argonne National Laboratory, 9700 South Cass Avenue, Lemont, IL 60439, USA
@@ -23,7 +23,7 @@ bibliography: paper.bib
 
 # Summary
 
-`multigrad` is a Python package which greatly facilitates the implementation of data-parallelized, differentiable models using the Jax [@jax2018github] framework.
+`multigrad` is a Python package which facilitates the implementation of data-parallelized, differentiable models using the Jax [@jax2018github] framework.
 Leveraging MPI (Message Passing Interface), `multigrad` efficiently sums and propagates gradients of custom-defined summary statistics across processors and computing nodes,
 making it a valuable tool for high-performance computing. Its simple yet flexible design makes it applicable to a wide variety of
 problems requiring large-data scalable solutions that would benefit from gradient-based optimization techniques.
