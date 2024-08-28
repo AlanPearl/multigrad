@@ -74,7 +74,6 @@ requirements.
 `multigrad` was developed to aid in parameter optimization for high-dimensional differentiable models applied to large datasets. It has enabled the scaling to cosmological volumes of a differentiable forward modeling pipeline which predicts galaxy properties based on a simulated dark matter density field (Diffmah: @Hearin:2021; Diffstar: @Alarcon:2023; DSPS: @Hearin:2023). Ongoing research is currently utilizing `multigrad` to optimize the parameters of this pipeline to reproduce observed galaxy properties (e.g. Beltz-Mohrmann et al. in prep.). More broadly, `multigrad` has useful applications for any scientific research that focuses on fitting high-dimensional models to large datasets and would benefit from computing parameter gradients in parallel.
 
 # Acknowledgements
-
-
+This work was supported in part by the OpenUniverse effort, which is funded by NASA under JPL Contract Task 70-711320, 'Maximizing Science Exploitation of Simulated Cosmological Survey Data Across Surveys', and by the DOE contract DE-AC02-06CH11357.
 
 # References
