@@ -26,7 +26,7 @@ bibliography: paper.bib
 `multigrad` is a Python package which facilitates the implementation of data-parallelized, differentiable models using the Jax [@jax2018github] framework.
 Leveraging MPI (Message Passing Interface), `multigrad` efficiently sums and propagates gradients of custom-defined summary statistics across processors and computing nodes,
 making it a valuable tool for high-performance computing. Its simple yet flexible design makes it applicable to a wide variety of
-problems requiring large-data scalable solutions that would benefit from gradient-based optimization techniques.
+problems requiring large-data scalable solutions that would benefit from gradient-based optimization techniques. Visit our [documentation page](https://multigrad.readthedocs.io) to learn how to use it.
 
 
 # Statement of Need
