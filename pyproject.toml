@@ -12,13 +12,14 @@ dynamic = ["dependencies", "version"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
+version = {attr = "setuptools_scm.get_version"}
 
 [project.urls]
 home = "https://github.com/AlanPearl/multigrad"
 
 [tool.setuptools_scm]
-write_to = "multigrad/_version.py"
-write_to_template = "__version__ = '{version}'"
+version_file = "multigrad/_version.py"
+version_file_template = "__version__ = '{version}'"
 
 [tool.setuptools]
 include-package-data = true
@@ -27,7 +28,7 @@ package-dir = {multigrad = "multigrad"}
 
 [build-system]
 requires = [
-    "setuptools>=45",
-    "setuptools_scm>=7"
+    "setuptools>=64",
+    "setuptools_scm>=8"
 ]
 build-backend = "setuptools.build_meta"
